@@ -370,4 +370,4 @@ Sensitive configuration should be kept outside the publicly accessible repositor
 
 ## Author
 
-Developed as part of the **Ergos Project** to automate student instrument tracking and reduce manual data capture.
+Developed as part of the **Ergos Project** for Prof. Andre van der Merwe to automate student instrument tracking and reduce manual data capture.
