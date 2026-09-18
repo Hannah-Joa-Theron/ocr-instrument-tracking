@@ -361,12 +361,6 @@ ergos-instrument-tracking/
 │
 ├── node-red/
 │   └── instrument_tracking_flow.json
-│
-├── images/
-│   └── examples/
-│
-└── docs/
-    └── system_architecture.md
 ```
 
 ---
