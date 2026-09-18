@@ -350,21 +350,6 @@ Potential future improvements include:
 
 ---
 
-## Repository Structure
-
-A suggested repository structure is:
-
-```text
-ergos-instrument-tracking/
-│
-├── README.md
-│
-├── node-red/
-│   └── instrument_tracking_flow.json
-```
-
----
-
 ## Security Note
 
 The Node-RED flow communicates with external services and may contain credentials such as API keys or database connection information.
