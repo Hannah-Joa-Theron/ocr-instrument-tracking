@@ -1,0 +1,716 @@
+[
+  {
+    "id": "241b5018e2081728",
+    "type": "tab",
+    "label": "Ergos_Project",
+    "disabled": false,
+    "info": ""
+  },
+
+  {
+    "id": "4acdc03b7631fdcc",
+    "type": "telegram receiver",
+    "z": "241b5018e2081728",
+    "name": "OCR_In (photo)",
+    "bot": "f5e3e72e65a300f2",
+    "saveDataDir": "",
+    "filterCommands": false,
+    "hasinput": false,
+    "inputs": 0,
+    "handleallupdates": false,
+    "x": 90,
+    "y": 240,
+    "wires": [
+      [
+        "fn_std_type_short_v2"
+      ],
+      [
+        "tg_nonphoto_debug"
+      ]
+    ]
+  },
+
+  {
+    "id": "tg_rx_type_cmd",
+    "type": "telegram receiver",
+    "z": "241b5018e2081728",
+    "name": "Type_In (text)",
+    "bot": "f5e3e72e65a300f2",
+    "saveDataDir": "",
+    "filterCommands": false,
+    "hasinput": false,
+    "inputs": 0,
+    "handleallupdates": false,
+    "x": 90,
+    "y": 120,
+    "wires": [
+      [
+        "fn_set_type_sticky"
+      ],
+      []
+    ]
+  },
+
+  {
+    "id": "fn_set_type_sticky",
+    "type": "function",
+    "z": "241b5018e2081728",
+    "name": "Set sticky instrument type (per chat)",
+    "func": "const chatId = msg.payload?.chatId;\nconst text = (msg.payload?.content || \"\").trim();\n\nif (!chatId || !text) return null;\n\n// allow clearing\nif (text.toLowerCase() === \"clear\") {\n  flow.set(\"instrumentType:\" + chatId, null);\n  msg.payload = {\n    chatId,\n    type: \"message\",\n    content: \"✅ Instrument type cleared. Next photo must include a type or you must set it again.\"\n  };\n  return msg;\n}\n\n// normalise user text to same parser as captions\nconst cap = text;\n\n// store raw, we will standardise now for safety\nlet c = cap.toLowerCase().trim();\n\nc = c\n  .replace(/[\\/_\\-]+/g, \" \")\n  .replace(/\\s+/g, \" \");\n\nc = c.replace(/redlight/g, \"red light\")\n     .replace(/bluelight/g, \"blue light\")\n     .replace(/reds(?:ound)?meter/g, \"red sound\")\n     .replace(/blues(?:ound)?meter/g, \"blue sound\");\n\nlet t = \"unknown\";\n\nif (c.includes(\"red\")) {\n  if (c.includes(\"temp\") || c.includes(\"hum\") || c.includes(\"humid\")) t = \"red_temp_hum\";\n  else if (c.includes(\"sound\")) t = \"red_sound\";\n  else if (c.includes(\"light\")) t = \"red_light\";\n}\n\nif (c.includes(\"blue\")) {\n  if (c.includes(\"air\") || c.includes(\"velocity\") || c.includes(\"velo\")) t = \"blue_air_velocity\";\n  else if (c.includes(\"sound\")) t = \"blue_sound\";\n  else if (c.includes(\"light\")) t = \"blue_light\";\n}\n\nflow.set(\"instrumentType:\" + chatId, t);\n\nmsg.payload = {\n  chatId,\n  type: \"message\",\n  content: (t === \"unknown\")\n    ? `⚠️ I couldn't understand that type: \"${text}\"\\nTry: red light / red sound / red temp hum / blue light / blue sound / blue air`\n    : `✅ Instrument type set to: ${t}\\n(Sticky for this chat. Now resend your photo.)`\n};\n\nreturn msg;",
+    "outputs": 1,
+    "x": 390,
+    "y": 120,
+    "wires": [
+      [
+        "e03741314b0e36de"
+      ]
+    ]
+  },
+
+  {
+    "id": "fn_std_type_short_v2",
+    "type": "function",
+    "z": "241b5018e2081728",
+    "name": "Standardise instrument type (caption OR sticky)",
+    "func": "const chatId = msg.payload?.chatId;\n\n// caption on the photo (optional)\nlet c = (msg.payload.caption || \"\").toLowerCase().trim();\n\n// normalise separators and whitespace\nc = c\n  .replace(/[\\/_\\-]+/g, \" \")\n  .replace(/\\s+/g, \" \");\n\n// collapse joined words\nc = c.replace(/redlight/g, \"red light\")\n     .replace(/bluelight/g, \"blue light\")\n     .replace(/reds(?:ound)?meter/g, \"red sound\")\n     .replace(/blues(?:ound)?meter/g, \"blue sound\");\n\nlet t = \"unknown\";\n\nif (c.includes(\"red\")) {\n  if (c.includes(\"temp\") || c.includes(\"hum\") || c.includes(\"humid\")) t = \"red_temp_hum\";\n  else if (c.includes(\"sound\")) t = \"red_sound\";\n  else if (c.includes(\"light\")) t = \"red_light\";\n}\n\nif (c.includes(\"blue\")) {\n  if (c.includes(\"air\") || c.includes(\"velocity\") || c.includes(\"velo\")) t = \"blue_air_velocity\";\n  else if (c.includes(\"sound\")) t = \"blue_sound\";\n  else if (c.includes(\"light\")) t = \"blue_light\";\n}\n\n// If caption didn't give a type, try sticky per-chat\nif (t === \"unknown\" && chatId) {\n  const sticky = flow.get(\"instrumentType:\" + chatId);\n  if (sticky) t = sticky;\n}\n\nmsg.instrument_type = t;\nmsg.chatId = chatId;\n\nreturn msg;",
+    "outputs": 1,
+    "timeout": "",
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 380,
+    "y": 240,
+    "wires": [
+      [
+        "sw_need_type"
+      ]
+    ]
+  },
+
+  {
+    "id": "sw_need_type",
+    "type": "switch",
+    "z": "241b5018e2081728",
+    "name": "Need instrument type?",
+    "property": "instrument_type",
+    "propertyType": "msg",
+    "rules": [
+      { "t": "eq", "v": "unknown", "vt": "str" },
+      { "t": "else" }
+    ],
+    "checkall": "true",
+    "repair": false,
+    "outputs": 2,
+    "x": 630,
+    "y": 240,
+    "wires": [
+      [
+        "fn_ask_type"
+      ],
+      [
+        "9269db58a5954525"
+      ]
+    ]
+  },
+
+  {
+    "id": "fn_ask_type",
+    "type": "function",
+    "z": "241b5018e2081728",
+    "name": "Ask for type (and stop)",
+    "func": "const chatId = msg.chatId || msg.payload?.chatId;\n\nmsg.payload = {\n  chatId,\n  type: \"message\",\n  content:\n    \"⚠️ Instrument type missing.\\n\" +\n    \"Reply with one of:\\n\" +\n    \"• red light\\n• red sound\\n• red temp hum\\n• blue light\\n• blue sound\\n• blue air\\n\\n\" +\n    \"Then resend the photo.\" \n};\n\nreturn msg;",
+    "outputs": 1,
+    "x": 850,
+    "y": 200,
+    "wires": [
+      [
+        "e03741314b0e36de"
+      ]
+    ]
+  },
+
+  {
+    "id": "9269db58a5954525",
+    "type": "change",
+    "z": "241b5018e2081728",
+    "name": "Set downloadUrl + tempPath",
+    "rules": [
+      { "t": "set", "p": "chatId", "pt": "msg", "to": "payload.chatId", "tot": "msg" },
+      { "t": "set", "p": "downloadUrl", "pt": "msg", "to": "payload.weblink", "tot": "msg" },
+      {
+        "t": "set",
+        "p": "tempPath",
+        "pt": "msg",
+        "to": "\"/data/Ergos/images/incoming/\" & $string(payload.chatId) & \"_\" & $string($millis()) & \".jpg\"",
+        "tot": "jsonata"
+      }
+    ],
+    "x": 920,
+    "y": 300,
+    "wires": [
+      [
+        "7c8882a7af463ff0",
+        "af47921fe2a04235"
+      ]
+    ]
+  },
+
+  {
+    "id": "7c8882a7af463ff0",
+    "type": "http request",
+    "z": "241b5018e2081728",
+    "name": "Download image (bin)",
+    "method": "GET",
+    "ret": "bin",
+    "paytoqs": "ignore",
+    "url": "{{{downloadUrl}}}",
+    "tls": "",
+    "persist": false,
+    "proxy": "",
+    "insecureHTTPParser": false,
+    "authType": "",
+    "senderr": true,
+    "headers": [],
+    "x": 1220,
+    "y": 300,
+    "wires": [
+      [
+        "2655adf6add59469",
+        "306816822e758976"
+      ]
+    ]
+  },
+
+  {
+    "id": "2655adf6add59469",
+    "type": "file",
+    "z": "241b5018e2081728",
+    "name": "Write to tempPath",
+    "filename": "tempPath",
+    "filenameType": "msg",
+    "appendNewline": false,
+    "createDir": true,
+    "overwriteFile": "true",
+    "encoding": "none",
+    "x": 1410,
+    "y": 300,
+    "wires": [
+      [
+        "7859dae9c75d77d9"
+      ]
+    ]
+  },
+
+  {
+    "id": "306816822e758976",
+    "type": "debug",
+    "z": "241b5018e2081728",
+    "name": "Downloaded (debug)",
+    "active": false,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "tempPath",
+    "targetType": "msg",
+    "x": 1650,
+    "y": 260,
+    "wires": []
+  },
+
+  {
+    "id": "7859dae9c75d77d9",
+    "type": "debug",
+    "z": "241b5018e2081728",
+    "name": "File written (debug)",
+    "active": false,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "tempPath",
+    "targetType": "msg",
+    "x": 1650,
+    "y": 300,
+    "wires": []
+  },
+
+  {
+    "id": "af47921fe2a04235",
+    "type": "function",
+    "z": "241b5018e2081728",
+    "name": "Set OCR request (apikey + body)",
+    "func": "msg.chatId = msg.payload.chatId;\nmsg.instrument_type = msg.instrument_type || \"unknown\";\n\nconst imageUrl = msg.payload.weblink;\nconst OCR_APIKEY = \"K88693503688957\";\n\nmsg.headers = {\n  \"Content-Type\": \"application/x-www-form-urlencoded\",\n  \"apikey\": OCR_APIKEY\n};\n\nmsg.payload = `url=${encodeURIComponent(imageUrl)}&language=eng&filetype=JPG&isOverlayRequired=false`;\n\nreturn msg;",
+    "outputs": 1,
+    "timeout": "",
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 950,
+    "y": 480,
+    "wires": [
+      [
+        "b32e2bed4f785ff3",
+        "47a570551b8053f2"
+      ]
+    ]
+  },
+
+  {
+    "id": "b32e2bed4f785ff3",
+    "type": "http request",
+    "z": "241b5018e2081728",
+    "name": "Send to OCR.Space",
+    "method": "POST",
+    "ret": "obj",
+    "paytoqs": "ignore",
+    "url": "https://api.ocr.space/parse/image",
+    "tls": "",
+    "persist": false,
+    "proxy": "",
+    "insecureHTTPParser": false,
+    "authType": "",
+    "senderr": true,
+    "headers": [
+      { "keyType": "other", "keyValue": "msg.headers", "valueType": "other", "valueValue": "" }
+    ],
+    "x": 1180,
+    "y": 480,
+    "wires": [
+      [
+        "c06065bc4ee2aa4c",
+        "7412b7c660e29ec8"
+      ]
+    ]
+  },
+
+  {
+    "id": "c06065bc4ee2aa4c",
+    "type": "function",
+    "z": "241b5018e2081728",
+    "name": "Parse OCR → student_number + instrument_number",
+    "func": "let ocrText = msg.payload?.ParsedResults?.[0]?.ParsedText || \"\";\n\nocrText = ocrText\n  .replace(/\\bg\\b/gi, \"9\")\n  .replace(/\\bb\\b/gi, \"8\")\n  .replace(/O/g, \"0\");\n\nlet candidates = ocrText.match(/\\b[0-9A-Z]{6,}\\b/gi) || [];\n\nlet studentNumber = null;\nlet instrumentNumber = null;\n\nfor (const wordRaw of candidates) {\n  const word = wordRaw.toUpperCase();\n  const digitCount = (word.match(/\\d/g) || []).length;\n  const ratio = digitCount / word.length;\n  if (ratio < 0.8) continue;\n\n  if (!studentNumber && /^\\d{8}$/.test(word)) {\n    studentNumber = word;\n    continue;\n  }\n  if (!instrumentNumber && /^\\d{9,}$/.test(word)) {\n    instrumentNumber = word;\n  }\n}\n\nmsg.data = {\n  student_number: studentNumber || \"Not found\",\n  instrument_number: instrumentNumber || \"Not found\",\n  instrument_type: msg.instrument_type || \"unknown\"\n};\n\nmsg.instrument_number = msg.data.instrument_number;\n\nreturn msg;",
+    "outputs": 1,
+    "timeout": "",
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 1460,
+    "y": 480,
+    "wires": [
+      [
+        "a241d0716c5d010b",
+        "a8ef400c3729277c"
+      ]
+    ]
+  },
+
+  {
+    "id": "a241d0716c5d010b",
+    "type": "function",
+    "z": "241b5018e2081728",
+    "name": "Validate + reply + send to Influx",
+    "func": "const chatId = msg.chatId;\nconst s = msg.data?.student_number;\nconst i = msg.data?.instrument_number;\nconst t = msg.data?.instrument_type || msg.instrument_type || \"unknown\";\n\nconst ok = s && i && s !== \"Not found\" && i !== \"Not found\";\n\nlet reply = {\n  payload: {\n    chatId,\n    type: \"message\",\n    content: ok\n      ? `✅ Captured\\nStudent: ${s}\\nInstrument: ${i}\\nType: ${t}\\n\\nSending to InfluxDB...`\n      : `⚠️ Could not capture both numbers.\\nStudent: ${s}\\nInstrument: ${i}\\nType: ${t}\\n\\nPlease send a clearer photo.`\n  }\n};\n\nif (!ok) return [reply, null];\n\nlet toInflux = {\n  chatId,\n  data: {\n    ...msg.data,\n    instrument_type: t\n  },\n  instrument_number: msg.instrument_number,\n  instrument_type: t,\n  tempPath: msg.tempPath\n};\n\nreturn [reply, toInflux];",
+    "outputs": 2,
+    "timeout": "",
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 1780,
+    "y": 480,
+    "wires": [
+      [
+        "e03741314b0e36de",
+        "1762bfb4b59e19f5"
+      ],
+      [
+        "bc1e893a7ca13476",
+        "rn_chg_filename"
+      ]
+    ]
+  },
+
+  {
+    "id": "e03741314b0e36de",
+    "type": "telegram sender",
+    "z": "241b5018e2081728",
+    "name": "Send reply to Telegram",
+    "bot": "f5e3e72e65a300f2",
+    "haserroroutput": false,
+    "outputs": 1,
+    "x": 2140,
+    "y": 400,
+    "wires": [
+      []
+    ]
+  },
+
+  {
+    "id": "tg_nonphoto_debug",
+    "type": "debug",
+    "z": "241b5018e2081728",
+    "name": "Non-photo msg (debug)",
+    "active": false,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "x": 310,
+    "y": 320,
+    "wires": []
+  },
+
+  {
+    "id": "47a570551b8053f2",
+    "type": "debug",
+    "z": "241b5018e2081728",
+    "name": "debug Set OCR request (apikey + body)",
+    "active": false,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "x": 990,
+    "y": 520,
+    "wires": []
+  },
+
+  {
+    "id": "7412b7c660e29ec8",
+    "type": "debug",
+    "z": "241b5018e2081728",
+    "name": "debug Send to OCR.Space",
+    "active": false,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "x": 1310,
+    "y": 520,
+    "wires": []
+  },
+
+  {
+    "id": "a8ef400c3729277c",
+    "type": "debug",
+    "z": "241b5018e2081728",
+    "name": "debug Parse OCR → student_number + instrument_number",
+    "active": false,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "x": 1580,
+    "y": 520,
+    "wires": []
+  },
+
+  {
+    "id": "1762bfb4b59e19f5",
+    "type": "debug",
+    "z": "241b5018e2081728",
+    "name": "debug Validate + reply + send to Influx",
+    "active": false,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "x": 2140,
+    "y": 480,
+    "wires": []
+  },
+
+  {
+    "id": "bc1e893a7ca13476",
+    "type": "change",
+    "z": "241b5018e2081728",
+    "name": "",
+    "rules": [
+      { "t": "set", "p": "student_number", "pt": "msg", "to": "data.student_number", "tot": "msg" }
+    ],
+    "action": "",
+    "property": "",
+    "from": "",
+    "to": "",
+    "reg": false,
+    "x": 890,
+    "y": 680,
+    "wires": [
+      [
+        "a41e9e097d237d87"
+      ]
+    ]
+  },
+
+  {
+    "id": "a41e9e097d237d87",
+    "type": "change",
+    "z": "241b5018e2081728",
+    "name": "",
+    "rules": [
+      { "t": "set", "p": "fields", "pt": "msg", "to": "instrument_number", "tot": "msg" },
+      { "t": "set", "p": "tags", "pt": "msg", "to": "student_number", "tot": "msg" },
+      {
+        "t": "set",
+        "p": "payload",
+        "pt": "msg",
+        "to": "[ {\"instrument serial\": fields}, {\"student number\": tags, \"instrument type\": data.instrument_type} ]",
+        "tot": "jsonata"
+      }
+    ],
+    "x": 1130,
+    "y": 680,
+    "wires": [
+      [
+        "78d8f9f83242d2fc",
+        "758d534c73e56265"
+      ]
+    ]
+  },
+
+  {
+    "id": "78d8f9f83242d2fc",
+    "type": "influxdb out",
+    "z": "241b5018e2081728",
+    "influxdb": "1384ba66bfe1f068",
+    "name": "",
+    "measurement": "project_instruments",
+    "precision": "",
+    "retentionPolicy": "",
+    "database": "database",
+    "precisionV18FluxV20": "ms",
+    "retentionPolicyV18Flux": "",
+    "org": "Sandbox_2",
+    "bucket": "ergos_student-serial",
+    "x": 1380,
+    "y": 680,
+    "wires": []
+  },
+
+  {
+    "id": "758d534c73e56265",
+    "type": "function",
+    "z": "241b5018e2081728",
+    "name": "Prepare inflx confirmation",
+    "func": "flow.set(\"pendingInflux:\" + msg._msgid, {\n  chatId: msg.chatId || msg.payload?.chatId,\n  ts: Date.now()\n});\nreturn msg;",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 1380,
+    "y": 620,
+    "wires": [
+      [
+        "fbe0bee24563300c"
+      ]
+    ]
+  },
+
+  {
+    "id": "fbe0bee24563300c",
+    "type": "trigger",
+    "z": "241b5018e2081728",
+    "name": "Delay success ping",
+    "op1": "",
+    "op2": "",
+    "op1type": "nul",
+    "op2type": "pay",
+    "duration": "2",
+    "extend": true,
+    "overrideDelay": false,
+    "units": "s",
+    "reset": "",
+    "bytopic": "all",
+    "topic": "topic",
+    "outputs": 1,
+    "x": 1560,
+    "y": 620,
+    "wires": [
+      [
+        "1191f2edfa1f131a"
+      ]
+    ]
+  },
+
+  {
+    "id": "1191f2edfa1f131a",
+    "type": "function",
+    "z": "241b5018e2081728",
+    "name": "Send success if no error",
+    "func": "const key = \"pendingInflux:\" + msg._msgid;\nconst pending = flow.get(key);\nif (!pending) return null;\nflow.set(key, null);\nmsg.payload = { chatId: pending.chatId, type: \"message\", content: \"✅ Saved to InfluxDB.\" };\nreturn msg;",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 1760,
+    "y": 620,
+    "wires": [
+      [
+        "2ca871d6aeb0f7da"
+      ]
+    ]
+  },
+
+  {
+    "id": "2ca871d6aeb0f7da",
+    "type": "telegram sender",
+    "z": "241b5018e2081728",
+    "name": "Telegram (Influx status)",
+    "bot": "f5e3e72e65a300f2",
+    "haserroroutput": false,
+    "outputs": 1,
+    "x": 2000,
+    "y": 620,
+    "wires": [
+      []
+    ]
+  },
+
+  {
+    "id": "rn_chg_filename",
+    "type": "change",
+    "z": "241b5018e2081728",
+    "name": "Rename: filename = tempPath",
+    "rules": [
+      { "t": "set", "p": "filename", "pt": "msg", "to": "tempPath", "tot": "msg" }
+    ],
+    "x": 890,
+    "y": 820,
+    "wires": [
+      [
+        "rn_chg_destination"
+      ]
+    ]
+  },
+
+  {
+    "id": "rn_chg_destination",
+    "type": "change",
+    "z": "241b5018e2081728",
+    "name": "Rename: destination = student_instr_001.jpg",
+    "rules": [
+      {
+        "t": "set",
+        "p": "destination",
+        "pt": "msg",
+        "to": "$replace(tempPath, /[^\\/]+$/, $string(data.student_number) & \"_\" & $string(data.instrument_number) & \"_\" & $string(data.instrument_type) & \".jpg\")",
+        "tot": "jsonata"
+      }
+    ],
+    "x": 1190,
+    "y": 820,
+    "wires": [
+      [
+        "rn_chg_mv_payload"
+      ]
+    ]
+  },
+
+  {
+    "id": "rn_chg_mv_payload",
+    "type": "change",
+    "z": "241b5018e2081728",
+    "name": "Rename: payload = \"src\" \"dst\"",
+    "rules": [
+      {
+        "t": "set",
+        "p": "payload",
+        "pt": "msg",
+        "to": "\"\\\"\" & filename & \"\\\" \\\"\" & destination & \"\\\"\"",
+        "tot": "jsonata"
+      }
+    ],
+    "x": 1490,
+    "y": 820,
+    "wires": [
+      [
+        "rn_exec_mv"
+      ]
+    ]
+  },
+
+  {
+    "id": "rn_exec_mv",
+    "type": "exec",
+    "z": "241b5018e2081728",
+    "command": "mv",
+    "addpay": "payload",
+    "append": "",
+    "useSpawn": "false",
+    "timer": "",
+    "winHide": false,
+    "name": "Rename (mv)",
+    "x": 1700,
+    "y": 820,
+    "wires": [
+      [],
+      [],
+      []
+    ]
+  },
+
+  {
+    "id": "f5e3e72e65a300f2",
+    "type": "telegram bot",
+    "botname": "OCR_Ergos_bot",
+    "usernames": "",
+    "chatids": "",
+    "baseapiurl": "",
+    "testenvironment": false,
+    "updatemode": "polling",
+    "pollinterval": "2",
+    "usesocks": false,
+    "sockshost": "",
+    "socksprotocol": "socks5",
+    "socksport": "6667",
+    "socksusername": "anonymous",
+    "sockspassword": "",
+    "bothost": "",
+    "botpath": "",
+    "localbothost": "0.0.0.0",
+    "localbotport": "8443",
+    "publicbotport": "8443",
+    "privatekey": "",
+    "certificate": "",
+    "useselfsignedcertificate": false,
+    "sslterminated": false,
+    "verboselogging": false
+  },
+
+  {
+    "id": "1384ba66bfe1f068",
+    "type": "influxdb",
+    "hostname": "127.0.0.1",
+    "port": 8086,
+    "protocol": "http",
+    "database": "database",
+    "name": "JoaSandbox",
+    "usetls": false,
+    "tls": "",
+    "influxdbVersion": "2.0",
+    "url": "http://host.docker.internal:8087",
+    "timeout": 10,
+    "rejectUnauthorized": true
+  },
+
+  {
+    "id": "e6b5370d0860578d",
+    "type": "global-config",
+    "env": [],
+    "modules": {
+      "node-red-contrib-telegrambot": "17.0.5",
+      "node-red-contrib-influxdb": "0.7.0"
+    }
+  }
+]
